@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Worlds Ticket Tracker</title>
+<meta name="description" content="Live resale prices for 3 seats together at the League of Legends Worlds 2026 Grand Final, Barclays Center, Brooklyn.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎟️</text></svg>">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface-1: #fcfcfb; --surface-2: #f3f2ee;
+  --text-primary: #0b0b0b; --text-secondary: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
+  --good-text: #006300; --good: #0ca30c; --warning: #fab219; --critical: #d03b3b;
+  --s-stubhub: #2a78d6; --s-vividseats: #eb6834; --s-tickpick: #1baf7a;
+  --s-gametime: #eda100; --s-ticketmaster: #e87ba4; --s-seatgeek: #008300;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface-1: #1a1a19; --surface-2: #232321;
+    --text-primary: #ffffff; --text-secondary: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --good-text: #0ca30c;
+    --s-stubhub: #3987e5; --s-vividseats: #d95926; --s-tickpick: #199e70;
+    --s-gametime: #c98500; --s-ticketmaster: #d55181; --s-seatgeek: #008300;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface-1: #1a1a19; --surface-2: #232321;
+  --text-primary: #ffffff; --text-secondary: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+  --good-text: #0ca30c;
+  --s-stubhub: #3987e5; --s-vividseats: #d95926; --s-tickpick: #199e70;
+  --s-gametime: #c98500; --s-ticketmaster: #d55181; --s-seatgeek: #008300;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--page); color: var(--text-primary); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1080px; margin: 0 auto; padding: 28px 16px 48px; }
+a { color: inherit; text-underline-offset: 3px; text-decoration-color: var(--axis); }
+a:hover { text-decoration-color: currentColor; }
+.eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 4px; }
+h1 { font-size: clamp(24px, 4vw, 32px); line-height: 1.15; margin: 0 0 6px; letter-spacing: -.01em; }
+h2 { font-size: 15px; margin: 0 0 12px; }
+.sub { color: var(--text-secondary); margin: 0; }
+.status { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin-top: 12px; font-size: 13px; color: var(--muted); }
+.live { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); }
+.live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 22%, transparent); }
+.live.stale::before { background: var(--warning); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warning) 25%, transparent); }
+.banner { margin-top: 14px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); color: var(--text-secondary); font-size: 13px; }
+.banner:empty { display: none; }
+.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 14px; padding: 18px; }
+.hero { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 14px; margin: 22px 0 14px; }
+.label { font-size: 13px; color: var(--text-secondary); margin: 0 0 2px; }
+.big { font-size: clamp(40px, 7vw, 56px); font-weight: 700; line-height: 1.05; letter-spacing: -.02em; }
+.big small { font-size: 18px; font-weight: 500; color: var(--text-secondary); letter-spacing: 0; }
+.where { margin: 6px 0 12px; color: var(--text-secondary); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font-size: 13px; padding: 3px 10px; border-radius: 999px; background: var(--surface-2); color: var(--text-secondary); }
+.chip.good { color: var(--good-text); }
+.tm-state { display: flex; gap: 10px; align-items: flex-start; margin: 8px 0 6px; }
+.icon { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 700; color: #fff; }
+.icon.good { background: var(--good); } .icon.neutral { background: var(--muted); } .icon.warning { background: var(--warning); color: #0b0b0b; }
+.tm-title { font-weight: 600; }
+.fine { font-size: 12.5px; color: var(--muted); margin: 8px 0 0; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.toolbar h2 { margin: 0; }
+.seg { display: inline-flex; background: var(--surface-2); border-radius: 9px; padding: 2px; }
+.seg button { font: inherit; font-size: 13px; border: 0; background: none; color: var(--text-secondary); padding: 4px 11px; border-radius: 7px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--surface-1); color: var(--text-primary); font-weight: 600; box-shadow: 0 0 0 1px var(--border); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 0 0 8px -6px; }
+.legend button { font: inherit; font-size: 13px; display: inline-flex; align-items: center; gap: 7px; border: 0; background: none; color: var(--text-secondary); padding: 3px 6px; border-radius: 6px; cursor: pointer; }
+.legend button:hover { background: var(--surface-2); }
+.legend button[aria-pressed="false"] { opacity: .45; }
+.sw { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.chart-wrap { position: relative; height: 360px; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; margin-top: 14px; }
+.tablewrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; font-weight: 500; font-size: 12px; color: var(--muted); padding: 0 8px 8px 0; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+td { padding: 9px 8px 9px 0; border-bottom: 1px solid var(--grid); vertical-align: middle; }
+tr:last-child td { border-bottom: 0; }
+.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.site { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.warn { color: var(--text-secondary); }
+.warn::before { content: "!"; display: inline-grid; place-items: center; width: 15px; height: 15px; margin-right: 5px; border-radius: 50%; background: var(--warning); color: #0b0b0b; font-size: 10px; font-weight: 800; }
+.okay { color: var(--muted); }
+.list { list-style: none; margin: 0; padding: 0; }
+.list li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--grid); }
+.list li:last-child { border-bottom: 0; }
+.list .price { font-weight: 600; font-variant-numeric: tabular-nums; }
+.list .meta { color: var(--text-secondary); font-size: 13px; }
+details { margin-top: 14px; }
+summary { cursor: pointer; font-weight: 600; }
+details .tablewrap { margin-top: 12px; max-height: 420px; overflow: auto; }
+footer { margin-top: 28px; font-size: 12.5px; color: var(--muted); }
+footer p { margin: 0 0 6px; }
+@media (max-width: 760px) {
+  .hero, .grid2 { grid-template-columns: minmax(0, 1fr); }
+  .chart-wrap { height: 300px; }
+}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <p class="eyebrow">Ticket tracker</p>
+    <h1>Worlds 2026 Grand Final</h1>
+    <p class="sub">Sat, Nov 14, 2026 · Barclays Center, Brooklyn · watching for <strong>3 seats together</strong> at <strong id="budget-h">$500</strong>/ticket or less (all-in)</p>
+    <div class="status"><span class="live" id="live">Loading…</span><span id="next"></span><span>Page refreshes itself</span></div>
+    <div class="banner" id="banner"></div>
+  </header>
+
+  <section class="hero">
+    <div class="card">
+      <p class="label">Cheapest 3 seats together right now</p>
+      <div class="big" id="hero-price">—</div>
+      <p class="where" id="hero-where"></p>
+      <div class="chips" id="hero-chips"></div>
+    </div>
+    <div class="card">
+      <p class="label">Ticketmaster (official seller)</p>
+      <div class="tm-state" id="tm"></div>
+      <p class="fine">Original face value was about $120–$350. If Ticketmaster releases more tickets, they'll show up here first.</p>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="toolbar">
+      <h2>Cheapest price per ticket for 3 seats together</h2>
+      <div class="seg" id="range" role="group" aria-label="Time range">
+        <button data-r="24h">24h</button><button data-r="3d">3 days</button><button data-r="7d">7 days</button><button data-r="all">All</button>
+      </div>
+    </div>
+    <div class="legend" id="legend" aria-label="Show or hide a site"></div>
+    <div class="chart-wrap"><canvas id="chart" role="img" aria-label="Line chart of the cheapest per-ticket price for 3 seats together on each ticket site over time. The same data is in the price history table below."></canvas></div>
+    <p class="fine">Each point is one hourly check. The dashed line is the $500 max. Prices include fees as shown by each site. Hover or tap the chart to compare sites.</p>
+  </section>
+
+  <section class="grid2">
+    <div class="card">
+      <h2>By site, latest check</h2>
+      <div class="tablewrap"><table id="sites"><thead><tr><th>Site</th><th class="num">Cheapest</th><th class="num">Listings</th><th>Status</th></tr></thead><tbody></tbody></table></div>
+    </div>
+    <div class="card">
+      <h2>Cheapest listings for 3 together</h2>
+      <ul class="list" id="top"></ul>
+    </div>
+  </section>
+
+  <details class="card">
+    <summary>Price history table</summary>
+    <div class="tablewrap"><table id="history"></table></div>
+  </details>
+
+  <footer>
+    <p>Prices are collected automatically every hour from StubHub, Vivid Seats, TickPick, Gametime and Ticketmaster (checks run while the tracker's computer is awake). A listing only counts if it can be bought as 3 seats together.</p>
+    <p>Always confirm the final price and seats on the ticket site before buying. Not affiliated with Riot Games or any ticket seller.</p>
+  </footer>
+</main>
+
+<script>
+const RANGES = { "24h": 864e5, "3d": 3 * 864e5, "7d": 7 * 864e5, "all": null };
+let DATA = null, chart = null, range = "all";
+const hidden = new Set();
+try { range = localStorage.getItem("range") || range; JSON.parse(localStorage.getItem("hidden") || "[]").forEach(h => hidden.add(h)); } catch (e) {}
+
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmt = v => v == null ? "—" : "$" + Math.round(v).toLocaleString("en-US");
+const nameOf = id => (DATA.sources.find(s => s.id === id) || { name: id }).name;
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+function ago(ms) {
+  const m = Math.round((Date.now() - ms) / 6e4);
+  if (m < 1) return "just now"; if (m < 60) return m + " min ago";
+  const h = Math.floor(m / 60); return h < 48 ? h + " h " + (m % 60) + " min ago" : Math.round(h / 24) + " days ago";
+}
+const clock = ms => new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+function overall() { // cheapest across sites at each run
+  return DATA.runs.map((t, i) => {
+    let best = null, src = null;
+    for (const s of DATA.sources) { const v = DATA.series[s.id][i]; if (v != null && (best == null || v < best)) { best = v; src = s.id; } }
+    return { t, v: best, src };
+  });
+}
+
+function renderStatus() {
+  const last = DATA.last_run;
+  if (!last) { $("live").textContent = "Waiting for the first check"; return; }
+  const stale = Date.now() - last > 3 * 36e5;
+  $("live").className = "live" + (stale ? " stale" : "");
+  $("live").textContent = "Last check " + ago(last);
+  const next = last + DATA.interval_min * 6e4;
+  $("next").textContent = Date.now() < next + 10 * 6e4 ? "Next check ≈ " + clock(next) : "Next check: when the tracker's computer wakes up";
+  $("banner").textContent = stale ? "Heads up: the last check was " + ago(last) + ", so prices may have changed since. The tracker only runs while its computer is awake." : "";
+}
+
+function renderHero() {
+  const b = DATA.budget, top = DATA.top[0];
+  $("budget-h").textContent = fmt(b);
+  if (!top) { $("hero-price").textContent = "—"; $("hero-where").textContent = "No listings for 3 seats together right now."; $("hero-chips").innerHTML = ""; return; }
+  $("hero-price").innerHTML = fmt(top.price) + " <small>/ticket</small>";
+  const seat = top.section && top.section !== "(see page)" ? "Sec " + esc(top.section) + (top.row ? " · Row " + esc(top.row) : "") : "exact seats on the listing page";
+  $("hero-where").innerHTML = "on <a href=\"" + esc(top.url) + "\" target=\"_blank\" rel=\"noopener\">" + esc(nameOf(top.source)) + "</a> · " + seat;
+  const chips = [];
+  const o = overall().filter(p => p.v != null), cur = o[o.length - 1];
+  if (cur && o.length > 1) {
+    const target = cur.t - 864e5;
+    const prev = o.reduce((a, p) => Math.abs(p.t - target) < Math.abs(a.t - target) ? p : a, o[0]);
+    if (prev.t < cur.t) {
+      const d = cur.v - prev.v, when = cur.t - prev.t > 20 * 36e5 ? "since yesterday" : "since " + clock(prev.t);
+      chips.push(d < 0 ? "<span class=\"chip good\">▼ down " + fmt(-d) + " " + when + "</span>"
+               : d > 0 ? "<span class=\"chip\">▲ up " + fmt(d) + " " + when + "</span>" : "<span class=\"chip\">No change " + when + "</span>");
+    }
+    const low = o.reduce((a, p) => p.v < a.v ? p : a, o[0]);
+    chips.push("<span class=\"chip\">Lowest seen " + fmt(low.v) + " · " + new Date(low.t).toLocaleDateString([], { month: "short", day: "numeric" }) + "</span>");
+  }
+  chips.push(top.price <= b ? "<span class=\"chip good\">✓ Within the " + fmt(b) + " max</span>"
+                            : "<span class=\"chip\">" + fmt(top.price - b) + " above the " + fmt(b) + " max</span>");
+  $("hero-chips").innerHTML = chips.join("");
+}
+
+function renderTM() {
+  const tm = DATA.ticketmaster || {}, url = (DATA.latest.ticketmaster || {}).url || "#";
+  let icon = "neutral", sym = "–", title = "No tickets available right now", body = "Checked every hour for a new release.";
+  if (!tm.ok) { icon = "warning"; sym = "!"; title = "Couldn't check this time"; body = "Will try again next hour."; }
+  else if (tm.queue) { icon = "good"; sym = "✓"; title = "Queue is open: tickets may be dropping"; body = "Open Ticketmaster now."; }
+  else if (tm.available) { icon = "good"; sym = "✓"; title = tm.available + " tickets available"; body = "Open Ticketmaster and check for 3 seats together."; }
+  $("tm").innerHTML = "<span class=\"icon " + icon + "\" aria-hidden=\"true\">" + sym + "</span><div><div class=\"tm-title\">" + title +
+    "</div><div class=\"label\">" + body + " <a href=\"" + esc(url) + "\" target=\"_blank\" rel=\"noopener\">Ticketmaster page</a></div></div>";
+}
+
+function renderTables() {
+  const rows = DATA.sources.map(s => {
+    const c = DATA.latest[s.id] || {};
+    const status = c.ok ? "<span class=\"okay\">Checked</span>" : "<span class=\"warn\">" + esc(c.error || "not checked") + "</span>";
+    const price = s.id === "ticketmaster" && c.best == null ? (DATA.ticketmaster.available ? DATA.ticketmaster.available + " avail." : "0 available") : fmt(c.best);
+    return "<tr><td><span class=\"site\"><span class=\"sw\" style=\"background:var(--s-" + s.id + ")\"></span><a href=\"" + esc(c.url) +
+      "\" target=\"_blank\" rel=\"noopener\">" + esc(s.name) + "</a></span></td><td class=\"num\">" + price + "</td><td class=\"num\">" +
+      (c.count ?? 0) + "</td><td>" + status + "</td></tr>";
+  });
+  $("sites").tBodies[0].innerHTML = rows.join("");
+  $("top").innerHTML = DATA.top.slice(0, 8).map(l => {
+    const seat = l.section && l.section !== "(see page)" ? "Sec " + esc(l.section) + (l.row ? " · Row " + esc(l.row) : "") : "seats on listing page";
+    return "<li><div><div class=\"price\">" + fmt(l.price) + " <span class=\"meta\">/ticket</span></div><div class=\"meta\">" + esc(nameOf(l.source)) + " · " + seat +
+      "</div></div><a class=\"meta\" href=\"" + esc(l.url) + "\" target=\"_blank\" rel=\"noopener\">View</a></li>";
+  }).join("") || "<li><span class=\"meta\">No listings for 3 seats together right now.</span></li>";
+  const srcs = DATA.sources.filter(s => DATA.series[s.id].some(v => v != null));
+  const head = "<thead><tr><th>Checked</th>" + srcs.map(s => "<th class=\"num\">" + esc(s.name) + "</th>").join("") + "</tr></thead>";
+  const body = DATA.runs.map((t, i) => ({ t, i })).reverse().map(({ t, i }) =>
+    "<tr><td>" + new Date(t).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) + "</td>" +
+    srcs.map(s => "<td class=\"num\">" + fmt(DATA.series[s.id][i]) + "</td>").join("") + "</tr>").join("");
+  $("history").innerHTML = head + "<tbody>" + body + "</tbody>";
+}
+
+// ---- chart plugins: crosshair, budget line, direct end labels
+const crosshair = { id: "crosshair", beforeDatasetsDraw(c) {
+  const a = c.tooltip && c.tooltip.getActiveElements(); if (!a || !a.length) return;
+  const x = Math.round(a[0].element.x) + .5, { top, bottom } = c.chartArea, g = c.ctx;
+  g.save(); g.strokeStyle = css("--muted"); g.lineWidth = 1; g.beginPath(); g.moveTo(x, top); g.lineTo(x, bottom); g.stroke(); g.restore();
+} };
+const budgetLine = { id: "budget", beforeDatasetsDraw(c) {
+  const y = c.scales.y.getPixelForValue(DATA.budget), { left, right, top, bottom } = c.chartArea, g = c.ctx;
+  if (y < top || y > bottom) return;
+  g.save(); g.setLineDash([6, 5]); g.strokeStyle = css("--text-secondary"); g.lineWidth = 1.5;
+  g.beginPath(); g.moveTo(left, y); g.lineTo(right, y); g.stroke(); g.setLineDash([]);
+  g.fillStyle = css("--text-secondary"); g.font = "600 12px system-ui, -apple-system, sans-serif"; g.textBaseline = "bottom";
+  g.fillText("Max " + fmt(DATA.budget) + "/ticket", left + 8, y - 5); g.restore();
+} };
+const endLabels = { id: "endLabels", afterDatasetsDraw(c) {
+  const items = [], g = c.ctx, narrow = c.width < 640;
+  c.data.datasets.forEach((ds, i) => {
+    if (!c.isDatasetVisible(i)) return;
+    let k = ds.data.length - 1; while (k >= 0 && ds.data[k].y == null) k--;
+    if (k < 0 || ds.data[k].x < c.scales.x.min) return;
+    const el = c.getDatasetMeta(i).data[k]; if (!el) return;
+    items.push({ x: el.x, y: el.y, ly: el.y, color: ds.borderColor, text: ds.label + " " + fmt(ds.data[k].y) });
+  });
+  g.save();
+  for (const it of items) { g.beginPath(); g.arc(it.x, it.y, 4, 0, 2 * Math.PI); g.fillStyle = it.color; g.fill(); g.lineWidth = 2; g.strokeStyle = css("--surface-1"); g.stroke(); }
+  if (!narrow && items.length <= 4) {
+    items.sort((a, b) => a.y - b.y);
+    for (let i = 1; i < items.length; i++) items[i].ly = Math.max(items[i].y, items[i - 1].ly + 16);
+    const over = items.length ? items[items.length - 1].ly - c.chartArea.bottom : 0;
+    if (over > 0) items.forEach(it => it.ly -= over);
+    g.font = "12px system-ui, -apple-system, sans-serif"; g.textBaseline = "middle"; g.fillStyle = css("--text-secondary");
+    for (const it of items) g.fillText(it.text, c.chartArea.right + 10, it.ly);
+  }
+  g.restore();
+} };
+
+function bounds() {
+  const last = DATA.runs[DATA.runs.length - 1], span = RANGES[range];
+  let xmin = span ? Math.max(last - span, DATA.runs[0]) : DATA.runs[0], xmax = last;
+  if (xmax - xmin < 36e5) { xmin -= 36e5; xmax += 36e5; }
+  const vals = [];
+  DATA.sources.forEach(s => { if (hidden.has(s.id)) return; DATA.series[s.id].forEach((v, i) => { if (v != null && DATA.runs[i] >= xmin) vals.push(v); }); });
+  const lo = Math.min(DATA.budget * 0.9, vals.length ? Math.min(...vals) : DATA.budget);
+  const hi = vals.length ? Math.max(...vals) * 1.04 : DATA.budget * 3;
+  const step = [100, 200, 250, 500, 1000, 2000].find(s => (hi - lo) / s <= 6) || 5000;
+  return { xmin, xmax, step, unit: xmax - xmin > 40 * 36e5 ? "day" : "hour",
+           ymin: Math.max(0, Math.floor(lo / step) * step), ymax: Math.ceil(hi / step) * step };
+}
+
+function renderChart() {
+  if (!DATA.runs.length) return;
+  const srcs = DATA.sources.filter(s => DATA.series[s.id].some(v => v != null));
+  $("legend").innerHTML = srcs.map(s => "<button data-s=\"" + s.id + "\" aria-pressed=\"" + !hidden.has(s.id) + "\"><span class=\"sw\" style=\"background:var(--s-" +
+    s.id + ")\"></span>" + esc(s.name) + "</button>").join("");
+  $("legend").querySelectorAll("button").forEach(b => b.onclick = () => {
+    hidden.has(b.dataset.s) ? hidden.delete(b.dataset.s) : hidden.add(b.dataset.s);
+    try { localStorage.setItem("hidden", JSON.stringify([...hidden])); } catch (e) {}
+    renderChart();
+  });
+  document.querySelectorAll("#range button").forEach(b => b.setAttribute("aria-pressed", b.dataset.r === range));
+  const bd = bounds(), wide = $("chart").parentElement.clientWidth >= 640 && srcs.filter(s => !hidden.has(s.id)).length <= 4;
+  const datasets = srcs.map(s => ({
+    label: s.name, sid: s.id, hidden: hidden.has(s.id),
+    data: DATA.runs.map((t, i) => ({ x: t, y: DATA.series[s.id][i] })),
+    borderColor: css("--s-" + s.id), backgroundColor: css("--s-" + s.id), borderWidth: 2, tension: 0, spanGaps: true,
+    pointRadius: 0, pointHitRadius: 12, pointHoverRadius: 5, pointHoverBorderWidth: 2, pointHoverBorderColor: css("--surface-1"),
+  }));
+  const tick = { color: css("--muted"), font: { size: 11, family: "system-ui, -apple-system, sans-serif" } };
+  const opts = {
+    responsive: true, maintainAspectRatio: false, animation: false,
+    layout: { padding: { right: wide ? 150 : 8, top: 8 } },
+    interaction: { mode: "index", intersect: false },
+    scales: {
+      x: { type: "time", min: bd.xmin, max: bd.xmax, ticks: { ...tick, maxTicksLimit: 8, maxRotation: 0, autoSkipPadding: 16 },
+           time: { unit: bd.unit, displayFormats: { hour: "EEE h a", day: "MMM d" } }, grid: { color: css("--grid"), drawTicks: false }, border: { color: css("--axis") } },
+      y: { min: bd.ymin, max: bd.ymax, ticks: { ...tick, stepSize: bd.step, callback: v => "$" + v.toLocaleString("en-US") },
+           grid: { color: css("--grid"), drawTicks: false }, border: { display: false } },
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: css("--surface-1"), borderColor: css("--axis"), borderWidth: 1, titleColor: css("--text-primary"),
+        bodyColor: css("--text-secondary"), padding: 10, usePointStyle: true, boxWidth: 8, boxHeight: 8, boxPadding: 4,
+        filter: it => it.parsed.y != null, itemSort: (a, b) => a.parsed.y - b.parsed.y,
+        callbacks: {
+          title: it => new Date(it[0].parsed.x).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }),
+          label: it => " " + it.dataset.label + "  " + fmt(it.parsed.y),
+          labelColor: it => ({ borderColor: it.dataset.borderColor, backgroundColor: it.dataset.borderColor }),
+        },
+      },
+    },
+  };
+  if (chart) chart.destroy();
+  chart = new Chart($("chart"), { type: "line", data: { datasets }, options: opts, plugins: [crosshair, budgetLine, endLabels] });
+}
+
+document.querySelectorAll("#range button").forEach(b => b.onclick = () => {
+  range = b.dataset.r; try { localStorage.setItem("range", range); } catch (e) {}
+  renderChart();
+});
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => DATA && renderChart());
+let lastW = innerWidth;
+addEventListener("resize", () => { if (DATA && Math.abs(innerWidth - lastW) > 40) { lastW = innerWidth; renderChart(); } });
+
+async function load() {
+  try {
+    const r = await fetch("data.json?t=" + Date.now(), { cache: "no-store" });
+    const d = await r.json();
+    const changed = !DATA || d.generated !== DATA.generated;
+    DATA = d;
+    if (changed) { renderHero(); renderTM(); renderTables(); renderChart(); }
+  } catch (e) {
+    if (!DATA) $("live").textContent = "Couldn't load the data. Retrying…";
+  }
+  if (DATA) renderStatus();
+}
+load();
+setInterval(load, 2 * 6e4);
+setInterval(() => DATA && renderStatus(), 3e4);
+</script>
+</body>
+</html>
