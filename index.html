@@ -68,6 +68,17 @@ h2 { font-size: 15px; margin: 0 0 12px; }
 .icon.good { background: var(--good); } .icon.neutral { background: var(--muted); } .icon.warning { background: var(--warning); color: #0b0b0b; }
 .tm-title { font-weight: 600; }
 .fine { font-size: 12.5px; color: var(--muted); margin: 8px 0 0; }
+.official { margin-bottom: 14px; }
+.links { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.link { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 10px; background: var(--surface-2); text-decoration: none; }
+.link:hover, .link:focus-visible { box-shadow: 0 0 0 1px var(--axis); }
+.link-title { font-weight: 600; font-size: 14px; }
+.link-desc { font-size: 13px; line-height: 1.45; color: var(--text-secondary); }
+.link-status { margin-top: auto; padding-top: 6px; font-size: 12.5px; line-height: 1.4; color: var(--text-primary); }
+.link-status:empty { display: none; }
+.chip.new { display: inline-block; margin-bottom: 4px; padding: 1px 8px; font-weight: 600; color: var(--text-primary); background: var(--surface-1); box-shadow: inset 0 0 0 1.5px var(--warning); }
+@media (max-width: 900px) { .links { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .links { grid-template-columns: minmax(0, 1fr); } }
 .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .toolbar h2 { margin: 0; }
 .seg { display: inline-flex; background: var(--surface-2); border-radius: 9px; padding: 2px; }
@@ -128,6 +139,33 @@ footer p { margin: 0 0 6px; }
       <div class="tm-state" id="tm"></div>
       <p class="fine">Original face value was about $120–$350. If Ticketmaster releases more tickets, they'll show up here first.</p>
     </div>
+  </section>
+
+  <section class="card official">
+    <div class="toolbar"><h2>Official ticket pages</h2><span class="fine" id="official-checked"></span></div>
+    <div class="links">
+      <a class="link" href="https://www.ticketmaster.com/event/300064EA0334EE28" target="_blank" rel="noopener">
+        <span class="link-title">Ticketmaster: Grand Final ↗</span>
+        <span class="link-desc">Riot's official seller. New face-value releases and Ticketmaster's own resale show up here.</span>
+        <span class="link-status" data-official="ticketmaster"></span>
+      </a>
+      <a class="link" href="https://www.barclayscenter.com/events/detail/league-of-legends-2026" target="_blank" rel="noopener">
+        <span class="link-title">Barclays Center event page ↗</span>
+        <span class="link-desc">The venue's official page for the Final: start time, doors, and its Ticketmaster link.</span>
+        <span class="link-status" data-official="barclays_event"></span>
+      </a>
+      <a class="link" href="https://lolesports.com/en-US/tickets" target="_blank" rel="noopener">
+        <span class="link-title">LoL Esports tickets ↗</span>
+        <span class="link-desc">Riot's official ticket hub (Fan First Access). Registration for 2026 closed June 30.</span>
+        <span class="link-status" data-official="lolesports_tickets"></span>
+      </a>
+      <a class="link" href="https://lolesports.com/en-US/news/worlds-2026-ticket-sales" target="_blank" rel="noopener">
+        <span class="link-title">Riot's ticket-sale rules ↗</span>
+        <span class="link-desc">How Worlds 2026 tickets are sold. For the presale, your Ticketmaster email had to match your Riot account email.</span>
+        <span class="link-status" data-official="riot_ticket_article"></span>
+      </a>
+    </div>
+    <p class="fine" id="official-news-wrap">Latest Riot ticket news: <span id="official-news">—</span></p>
   </section>
 
   <section class="card">
@@ -234,6 +272,24 @@ function renderTM() {
   else if (tm.available) { icon = "good"; sym = "✓"; title = tm.available + " tickets available"; body = "Open Ticketmaster and check for 3 seats together."; }
   $("tm").innerHTML = "<span class=\"icon " + icon + "\" aria-hidden=\"true\">" + sym + "</span><div><div class=\"tm-title\">" + title +
     "</div><div class=\"label\">" + body + " <a href=\"" + esc(url) + "\" target=\"_blank\" rel=\"noopener\">Ticketmaster page</a></div></div>";
+}
+
+function renderOfficial() {
+  const o = DATA.official;
+  const set = (id, h) => { const el = document.querySelector('[data-official="' + id + '"]'); if (el) el.innerHTML = h; };
+  const when = iso => new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  const tf = o && o.ticketmaster, th = DATA.ticketmaster || {};
+  const fresh = tf && tf.ok && (!DATA.last_run || Date.parse(tf.checked) > DATA.last_run);
+  const tmN = fresh ? tf.available : th.available, tmQ = fresh ? tf.queue : th.queue;
+  set("ticketmaster", tmQ ? '<span class="chip new">● Queue open</span>' : tmN ? '<span class="chip new">● ' + tmN + " tickets available</span>" : "Right now: 0 tickets available");
+  if (!o) return;
+  $("official-checked").textContent = "Checked every " + (o.interval_min || 15) + " min · last " + ago(Date.parse(o.checked));
+  for (const [id, p] of Object.entries(o.pages || {})) {
+    const recent = p.changed && Date.now() - Date.parse(p.changed) < 48 * 36e5;
+    let s = !p.ok ? "Couldn't read it on the last check" : id === "riot_ticket_article" ? (p.changed ? "" : "No edits since tracking began") : "Right now: " + esc(p.summary);
+    set(id, (recent ? '<span class="chip new">● Changed ' + when(p.changed) + "</span><br>" : p.changed ? "Last changed " + when(p.changed) + ". " : "") + s);
+  }
+  $("official-news").innerHTML = (o.news || []).slice(0, 3).map(n => '<a href="' + esc(n.url) + '" target="_blank" rel="noopener">' + esc(n.title) + "</a>").join(" · ") || "none yet";
 }
 
 function renderTables() {
@@ -369,7 +425,7 @@ async function load() {
     const d = await r.json();
     const changed = !DATA || d.generated !== DATA.generated;
     DATA = d;
-    if (changed) { renderHero(); renderTM(); renderTables(); renderChart(); }
+    if (changed) { renderHero(); renderTM(); renderOfficial(); renderTables(); renderChart(); }
   } catch (e) {
     if (!DATA) $("live").textContent = "Couldn't load the data. Retrying…";
   }
@@ -377,7 +433,7 @@ async function load() {
 }
 load();
 setInterval(load, 2 * 6e4);
-setInterval(() => DATA && renderStatus(), 3e4);
+setInterval(() => { if (DATA) { renderStatus(); renderOfficial(); } }, 3e4);
 </script>
 </body>
 </html>
