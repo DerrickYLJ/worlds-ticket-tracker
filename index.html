@@ -129,7 +129,7 @@ footer p { margin: 0 0 6px; }
 
   <section class="hero">
     <div class="card">
-      <p class="label">Cheapest 3 seats together right now</p>
+      <p class="label">Cheapest verified 3 seats together</p>
       <div class="big" id="hero-price">—</div>
       <p class="where" id="hero-where"></p>
       <div class="chips" id="hero-chips"></div>
@@ -137,7 +137,7 @@ footer p { margin: 0 0 6px; }
     <div class="card">
       <p class="label">Ticketmaster (official seller)</p>
       <div class="tm-state" id="tm"></div>
-      <p class="fine">Original face value was about $120–$350. If Ticketmaster releases more tickets, they'll show up here first.</p>
+      <p class="fine">Check Ticketmaster directly for new official releases. An unsuccessful check does not mean tickets are sold out.</p>
     </div>
   </section>
 
@@ -177,7 +177,7 @@ footer p { margin: 0 0 6px; }
     </div>
     <div class="legend" id="legend" aria-label="Show or hide a site"></div>
     <div class="chart-wrap"><canvas id="chart" role="img" aria-label="Line chart of the cheapest per-ticket price for 3 seats together on each ticket site over time. The same data is in the price history table below."></canvas></div>
-    <p class="fine">Each point is one hourly check. The dashed line is the $500 max. Prices include fees as shown by each site. Hover or tap the chart to compare sites.</p>
+    <p class="fine">Each point is a recorded check; gaps indicate missing observations. The dashed line is the $500 max. Prices include fees as shown by each site. Hover or tap the chart to compare sites.</p>
   </section>
 
   <section class="grid2">
@@ -197,7 +197,7 @@ footer p { margin: 0 0 6px; }
   </details>
 
   <footer>
-    <p>Prices are collected automatically every hour from StubHub, Vivid Seats, TickPick, Gametime and Ticketmaster (checks run while the tracker's computer is awake). A listing only counts if it can be bought as 3 seats together.</p>
+    <p>The latest refresh checks StubHub, Vivid Seats, TickPick, Gametime and Ticketmaster for 3 tickets together. Current seated offers exclude standing room. Older history is retained as originally collected; collection methods and available sites may differ.</p>
     <p>Always confirm the final price and seats on the ticket site before buying. Not affiliated with Riot Games or any ticket seller.</p>
   </footer>
 </main>
@@ -234,6 +234,11 @@ function renderStatus() {
   const stale = Date.now() - last > 3 * 36e5;
   $("live").className = "live" + (stale ? " stale" : "");
   $("live").textContent = "Last check " + ago(last);
+  if (DATA.refresh_mode === "manual") {
+    $("next").textContent = "One-time check · " + new Date(last).toLocaleString("en-US", {timeZone:"America/New_York", month:"short", day:"numeric", hour:"numeric", minute:"2-digit", timeZoneName:"short"});
+    $("banner").textContent = (stale ? "Prices may have changed. " : "") + DATA.refresh_note;
+    return;
+  }
   const next = last + DATA.interval_min * 6e4;
   $("next").textContent = Date.now() < next + 10 * 6e4 ? "Next check ≈ " + clock(next) : "Next check: when the tracker's computer wakes up";
   $("banner").textContent = stale ? "Heads up: the last check was " + ago(last) + ", so prices may have changed since. The tracker only runs while its computer is awake." : "";
@@ -242,22 +247,22 @@ function renderStatus() {
 function renderHero() {
   const b = DATA.budget, top = DATA.top[0];
   $("budget-h").textContent = fmt(b);
-  if (!top) { $("hero-price").textContent = "—"; $("hero-where").textContent = "No listings for 3 seats together right now."; $("hero-chips").innerHTML = ""; return; }
+  if (!top) { $("hero-price").textContent = "—"; $("hero-where").textContent = "No verified three-seat quote from the latest check."; $("hero-chips").innerHTML = ""; return; }
   $("hero-price").innerHTML = fmt(top.price) + " <small>/ticket</small>";
   const seat = top.section && top.section !== "(see page)" ? "Sec " + esc(top.section) + (top.row ? " · Row " + esc(top.row) : "") : "exact seats on the listing page";
   $("hero-where").innerHTML = "on <a href=\"" + esc(top.url) + "\" target=\"_blank\" rel=\"noopener\">" + esc(nameOf(top.source)) + "</a> · " + seat;
-  const chips = [];
+  const chips = ["<span class=\"chip\">" + fmt(top.price * DATA.qty) + " for " + DATA.qty + " tickets</span>"];
   const o = overall().filter(p => p.v != null), cur = o[o.length - 1];
   if (cur && o.length > 1) {
     const target = cur.t - 864e5;
     const prev = o.reduce((a, p) => Math.abs(p.t - target) < Math.abs(a.t - target) ? p : a, o[0]);
-    if (prev.t < cur.t) {
+    if (prev.t < cur.t && DATA.refresh_mode !== "manual") {
       const d = cur.v - prev.v, when = cur.t - prev.t > 20 * 36e5 ? "since yesterday" : "since " + clock(prev.t);
       chips.push(d < 0 ? "<span class=\"chip good\">▼ down " + fmt(-d) + " " + when + "</span>"
                : d > 0 ? "<span class=\"chip\">▲ up " + fmt(d) + " " + when + "</span>" : "<span class=\"chip\">No change " + when + "</span>");
     }
     const low = o.reduce((a, p) => p.v < a.v ? p : a, o[0]);
-    chips.push("<span class=\"chip\">Lowest seen " + fmt(low.v) + " · " + new Date(low.t).toLocaleDateString([], { month: "short", day: "numeric" }) + "</span>");
+    chips.push("<span class=\"chip\">Historical low (unverified) " + fmt(low.v) + " · " + new Date(low.t).toLocaleDateString([], { month: "short", day: "numeric" }) + "</span>");
   }
   chips.push(top.price <= b ? "<span class=\"chip good\">✓ Within the " + fmt(b) + " max</span>"
                             : "<span class=\"chip\">" + fmt(top.price - b) + " above the " + fmt(b) + " max</span>");
@@ -266,8 +271,8 @@ function renderHero() {
 
 function renderTM() {
   const tm = DATA.ticketmaster || {}, url = (DATA.latest.ticketmaster || {}).url || "#";
-  let icon = "neutral", sym = "–", title = "No tickets available right now", body = "Checked every hour for a new release.";
-  if (!tm.ok) { icon = "warning"; sym = "!"; title = "Couldn't check this time"; body = "Will try again next hour."; }
+  let icon = "neutral", sym = "–", title = "No tickets available right now", body = "Availability from the last successful check.";
+  if (!tm.ok) { icon = "warning"; sym = "!"; title = "Couldn't check this time"; body = esc(tm.error || "Current availability is unknown.");; }
   else if (tm.queue) { icon = "good"; sym = "✓"; title = "Queue is open: tickets may be dropping"; body = "Open Ticketmaster now."; }
   else if (tm.available) { icon = "good"; sym = "✓"; title = tm.available + " tickets available"; body = "Open Ticketmaster and check for 3 seats together."; }
   $("tm").innerHTML = "<span class=\"icon " + icon + "\" aria-hidden=\"true\">" + sym + "</span><div><div class=\"tm-title\">" + title +
@@ -280,13 +285,13 @@ function renderOfficial() {
   const when = iso => new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   const tf = o && o.ticketmaster, th = DATA.ticketmaster || {};
   const fresh = tf && tf.ok && (!DATA.last_run || Date.parse(tf.checked) > DATA.last_run);
-  const tmN = fresh ? tf.available : th.available, tmQ = fresh ? tf.queue : th.queue;
-  set("ticketmaster", tmQ ? '<span class="chip new">● Queue open</span>' : tmN ? '<span class="chip new">● ' + tmN + " tickets available</span>" : "Right now: 0 tickets available");
+  const tmN = fresh ? tf.available : th.available, tmQ = fresh ? tf.queue : th.queue, tmOK = fresh ? tf.ok : th.ok;
+  set("ticketmaster", !tmOK ? "Current availability unverified" : tmQ ? '<span class="chip new">● Queue open</span>' : tmN ? '<span class="chip new">● ' + tmN + " tickets available</span>" : "Right now: 0 tickets available");
   if (!o) return;
-  $("official-checked").textContent = "Checked every " + (o.interval_min || 15) + " min · last " + ago(Date.parse(o.checked));
+  $("official-checked").textContent = "Page/news snapshot: " + when(o.checked) + " · " + ago(Date.parse(o.checked));
   for (const [id, p] of Object.entries(o.pages || {})) {
     const recent = p.changed && Date.now() - Date.parse(p.changed) < 48 * 36e5;
-    let s = !p.ok ? "Couldn't read it on the last check" : id === "riot_ticket_article" ? (p.changed ? "" : "No edits since tracking began") : "Right now: " + esc(p.summary);
+    let s = !p.ok ? "Couldn't read it on the last check" : id === "riot_ticket_article" ? (p.changed ? "" : "No edits since tracking began") : "At that check: " + esc(p.summary);
     set(id, (recent ? '<span class="chip new">● Changed ' + when(p.changed) + "</span><br>" : p.changed ? "Last changed " + when(p.changed) + ". " : "") + s);
   }
   $("official-news").innerHTML = (o.news || []).slice(0, 3).map(n => '<a href="' + esc(n.url) + '" target="_blank" rel="noopener">' + esc(n.title) + "</a>").join(" · ") || "none yet";
@@ -296,17 +301,17 @@ function renderTables() {
   const rows = DATA.sources.map(s => {
     const c = DATA.latest[s.id] || {};
     const status = c.ok ? "<span class=\"okay\">Checked</span>" : "<span class=\"warn\">" + esc(c.error || "not checked") + "</span>";
-    const price = s.id === "ticketmaster" && c.best == null ? (DATA.ticketmaster.available ? DATA.ticketmaster.available + " avail." : "0 available") : fmt(c.best);
+    const price = !c.ok ? "Unknown" : s.id === "ticketmaster" && c.best == null ? (DATA.ticketmaster.available ? DATA.ticketmaster.available + " avail." : "0 available") : fmt(c.best);
     return "<tr><td><span class=\"site\"><span class=\"sw\" style=\"background:var(--s-" + s.id + ")\"></span><a href=\"" + esc(c.url) +
       "\" target=\"_blank\" rel=\"noopener\">" + esc(s.name) + "</a></span></td><td class=\"num\">" + price + "</td><td class=\"num\">" +
-      (c.count ?? 0) + "</td><td>" + status + "</td></tr>";
+      (c.count ?? "—") + "</td><td>" + status + "</td></tr>";
   });
   $("sites").tBodies[0].innerHTML = rows.join("");
   $("top").innerHTML = DATA.top.slice(0, 8).map(l => {
     const seat = l.section && l.section !== "(see page)" ? "Sec " + esc(l.section) + (l.row ? " · Row " + esc(l.row) : "") : "seats on listing page";
     return "<li><div><div class=\"price\">" + fmt(l.price) + " <span class=\"meta\">/ticket</span></div><div class=\"meta\">" + esc(nameOf(l.source)) + " · " + seat +
       "</div></div><a class=\"meta\" href=\"" + esc(l.url) + "\" target=\"_blank\" rel=\"noopener\">View</a></li>";
-  }).join("") || "<li><span class=\"meta\">No listings for 3 seats together right now.</span></li>";
+  }).join("") || "<li><span class=\"meta\">No verified three-seat quote from the latest check.</span></li>";
   const srcs = DATA.sources.filter(s => DATA.series[s.id].some(v => v != null));
   const head = "<thead><tr><th>Checked</th>" + srcs.map(s => "<th class=\"num\">" + esc(s.name) + "</th>").join("") + "</tr></thead>";
   const body = DATA.runs.map((t, i) => ({ t, i })).reverse().map(({ t, i }) =>
@@ -379,7 +384,7 @@ function renderChart() {
   const datasets = srcs.map(s => ({
     label: s.name, sid: s.id, hidden: hidden.has(s.id),
     data: DATA.runs.map((t, i) => ({ x: t, y: DATA.series[s.id][i] })),
-    borderColor: css("--s-" + s.id), backgroundColor: css("--s-" + s.id), borderWidth: 2, tension: 0, spanGaps: true,
+    borderColor: css("--s-" + s.id), backgroundColor: css("--s-" + s.id), borderWidth: 2, tension: 0, spanGaps: false,
     pointRadius: 0, pointHitRadius: 12, pointHoverRadius: 5, pointHoverBorderWidth: 2, pointHoverBorderColor: css("--surface-1"),
   }));
   const tick = { color: css("--muted"), font: { size: 11, family: "system-ui, -apple-system, sans-serif" } };
